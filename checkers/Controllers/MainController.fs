@@ -20,7 +20,7 @@ type MainController (logger : ILogger<MainController>, context : IHttpContextAcc
     static let mutable roomIndex = 0
     static let mutable userIndex = 0
 
-    let helper = [None; Red; Blue; RedQueen; BlueQueen];
+    let helper = [NoPiece; Red; Blue; RedQueen; BlueQueen];
     
     let board =
         Data.boardData |>

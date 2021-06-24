@@ -10,10 +10,15 @@ type Point = { mutable X: int; mutable Y: int }
 type Move = { mutable From: Point; mutable To: Point }
 
 type Cell =
-    None | Red | Blue | RedQueen | BlueQueen
-    member __.IsRedPiece: bool = __ = Red || __ = RedQueen        
-    member __.IsFoe (other: Cell): bool = __.IsRedPiece <> other.IsRedPiece
-    member __.IsAlly (other: Cell): bool = __.IsRedPiece = other.IsRedPiece
+    NoPiece | Red | Blue | RedQueen | BlueQueen
+    member __.IsRedPiece: bool = __ = Red || __ = RedQueen    
+    member __.IsBluePiece: bool = __ = Blue || __ = BlueQueen 
+    member __.IsFoe (other: Cell): bool =
+        __.IsRedPiece && other.IsBluePiece ||
+        __.IsBluePiece && other.IsRedPiece
+    member __.IsAlly (other: Cell): bool =
+        __.IsRedPiece && other.IsRedPiece ||
+        __.IsBluePiece && other.IsBluePiece
 
 let getDiff (a: Point) (b: Point) : Point =
     { X = b.X - a.X; Y = b.Y - a.Y }
@@ -43,10 +48,10 @@ type Room =
     member __.Eat (isFirst: bool) (userPath: Point[]): Unit =
         for point in userPath do
             if isFirst && __.Board.[point.Y].[point.X] = Blue then
-                __.Board.[point.Y].[point.X] <- None
+                __.Board.[point.Y].[point.X] <- NoPiece
 
             if not isFirst && __.Board.[point.Y].[point.X] = Red then
-                __.Board.[point.Y].[point.X] <- None
+                __.Board.[point.Y].[point.X] <- NoPiece
 
     member __.ForUser (isFirst: bool): Room =
         if isFirst then __ else __.Flip()
@@ -55,61 +60,80 @@ type Room =
         if isFirst then point else { X = 7 - point.X; Y = 7 - point.Y }
 
     member __.validatePath (isFirst: bool) (path: Point[]): bool =
-        let mutable valid = true
-        let mutable eated = false
-        let mutable rested = true
-        let mutable turned = false
-        let mutable lastDir: Option<Point> = Option.None
+        if path.Length < 2 then
+            true
+        else            
+            let mutable valid = true
+            let mutable prev = path.[0]
+            let mutable prevPiece = __.Board.[prev.Y].[prev.X]
+            let mutable first = prev
+            let mutable firstPiece = prevPiece
+            let mutable lastDir: Option<Point> = Option.None
 
-        for i in 0..path.Length - 2 do
-            let From = path.[i]
-            let To = path.[i + 1]
-            let diff = getDiff From To
-            
-            System.Diagnostics.Trace.WriteLine(sprintf "From %O To %O Diff %O" From To diff)
+            if prevPiece = Red || prevPiece = Blue then
+                for i in 1..path.Length - 1 do
+                    let current = path.[i]
+                    let currentPiece = __.Board.[current.Y].[current.X]
+                    let diff = getDiff prev current
+                    
+                    let yDir = if isFirst then -1 else 1
 
-            if Math.Abs diff.Y > 1 then
-                valid <- false
-
-            if Option.exists (fun point -> point <> diff) lastDir then
-                if eated then
-                    turned <- true
-                    eated <- false
-                else
-                    valid <- false
-
-            let enemy = if isFirst then Blue else Red
-
-            if __.Board.[To.Y].[To.X] = enemy then
-                if rested then
-                    rested <- false
-                    eated <- true
-                else
-                    valid <- false
-
-            if __.Board.[To.Y].[To.X] = None then
-                rested <- true
-                            
-            System.Diagnostics.Trace.WriteLine(sprintf "i %O turned %O eated %O" i turned eated)
-
-            if i = path.Length - 2 then
-                if turned && not eated then
-                    valid <- false
-
-                if __.Board.[To.Y].[To.X] <> None then
-                    valid <- false
-                
-                let start = path.[0]
-                let player = __.Board.[start.Y].[start.X]
-
-                if player = Red || player = Blue then                
-                    System.Diagnostics.Trace.WriteLine(sprintf "len %O" path.Length)
-                    if path.Length = 3 && not eated then
+                    if diff.Y <> yDir || Math.Abs diff.X > 1 then
                         valid <- false
 
-                    if path.Length > 3 then
+                    if prevPiece = NoPiece && currentPiece = NoPiece then
+                        valid <- false
+                    
+                    if firstPiece.IsFoe prevPiece && firstPiece.IsFoe currentPiece then
                         valid <- false
 
-            lastDir <- Some(diff)
-        
-        valid
+                    if firstPiece.IsAlly currentPiece then
+                        valid <- false
+
+                    if Option.exists (fun point -> point <> diff) lastDir then
+                        if prevPiece <> NoPiece then                            
+                            valid <- false
+                                        
+                    System.Diagnostics.Trace.WriteLine(sprintf "prev %O current %O" prevPiece currentPiece)
+                    System.Diagnostics.Trace.WriteLine(sprintf "diff %O valid %O" diff valid)
+
+                    lastDir <- Some(diff)
+                    prev <- current
+                    prevPiece <- currentPiece
+                                    
+                let mutable last = path.[path.Length - 1]
+                let mutable lastPiece = __.Board.[last.Y].[last.X]
+
+                lastPiece = NoPiece && valid
+            else
+                for i in 1..path.Length - 1 do
+                    let current = path.[i]
+                    let currentPiece = __.Board.[current.Y].[current.X]
+                    let diff = getDiff prev current
+
+                    if Math.Abs diff.Y > 1 || Math.Abs diff.X > 1 then
+                        valid <- false
+                    
+                    if firstPiece.IsFoe prevPiece && firstPiece.IsFoe currentPiece then
+                        valid <- false
+                    
+                    if firstPiece.IsAlly currentPiece then
+                        valid <- false
+
+                    if Option.exists (fun point -> point <> diff) lastDir then
+                        if prevPiece <> NoPiece then                            
+                            valid <- false
+                        if currentPiece = NoPiece then                            
+                            valid <- false
+                    
+                    System.Diagnostics.Trace.WriteLine(sprintf "prev %O current %O" prevPiece currentPiece)
+                    System.Diagnostics.Trace.WriteLine(sprintf "diff %O valid %O" diff valid)
+
+                    lastDir <- Some(diff)
+                    prev <- current
+                    prevPiece <- currentPiece
+
+                let mutable last = path.[path.Length - 1]
+                let mutable lastPiece = __.Board.[last.Y].[last.X]
+
+                lastPiece = NoPiece && valid
