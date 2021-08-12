@@ -1,2 +1,2 @@
 # checkers
-An online checkers game. [Demo](https://jakeactually.com/checkers)
+An online checkers game. [demo](https://jakeactually.com/checkers)
