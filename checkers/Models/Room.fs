@@ -2,6 +2,7 @@
 
 open System.Net.WebSockets
 open System
+open System.Text.Json.Serialization
 
 [<Struct>]
 type Point = { mutable X: int; mutable Y: int }
@@ -9,6 +10,7 @@ type Point = { mutable X: int; mutable Y: int }
 [<Struct>]
 type Move = { mutable From: Point; mutable To: Point }
 
+[<JsonConverter(typeof<CellJsonConverter>)>]
 type Cell =
     NoPiece | Red | Blue | RedQueen | BlueQueen
     member __.IsRedPiece: bool = __ = Red || __ = RedQueen    
@@ -19,6 +21,26 @@ type Cell =
     member __.IsAlly (other: Cell): bool =
         __.IsRedPiece && other.IsRedPiece ||
         __.IsBluePiece && other.IsBluePiece
+
+and CellJsonConverter() =
+    inherit JsonConverter<Cell>()
+
+    override __.Write(writer, value, options) =
+        match value with
+        | NoPiece -> writer.WriteStringValue("NoPiece")
+        | Red -> writer.WriteStringValue("Red")
+        | Blue -> writer.WriteStringValue("Blue")
+        | RedQueen -> writer.WriteStringValue("RedQueen")
+        | BlueQueen -> writer.WriteStringValue("BlueQueen")
+
+    override __.Read(reader, typeToConvert, options) =
+        let value = reader.GetString()
+        match value with
+        | "NoPiece" -> NoPiece
+        | "Red" -> Red
+        | "Blue" -> Blue
+        | "RedQueen" -> RedQueen
+        | "BlueQueen" -> BlueQueen
 
 let getDiff (a: Point) (b: Point) : Point =
     { X = b.X - a.X; Y = b.Y - a.Y }
@@ -66,7 +88,6 @@ type Room =
             let mutable valid = true
             let mutable prev = path.[0]
             let mutable prevPiece = __.Board.[prev.Y].[prev.X]
-            let mutable first = prev
             let mutable firstPiece = prevPiece
             let mutable lastDir: Option<Point> = Option.None
 
